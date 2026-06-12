@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apex Web SDK Test Page</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #222;
+    }
+    fieldset {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      padding: 1rem;
+    }
+    legend { font-weight: 600; }
+    label { display: block; margin: 0.4rem 0 0.1rem; font-size: 0.85rem; }
+    input, select {
+      width: 100%;
+      max-width: 320px;
+      padding: 0.35rem;
+      box-sizing: border-box;
+    }
+    button {
+      margin: 0.5rem 0.25rem 0 0;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 6px;
+      background: #e8590c;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #status { font-weight: 600; }
+    #log {
+      background: #111;
+      color: #9fe89f;
+      font-family: monospace;
+      font-size: 0.8rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      height: 260px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>Apex Web SDK Test Page</h1>
+  <p>Status: <span id="status">Logged out</span></p>
+
+  <fieldset>
+    <legend>Configuration</legend>
+    <label for="environment">Environment</label>
+    <select id="environment">
+      <option value="na-dev" selected>NA Dev</option>
+      <option value="na-stage">NA Stage</option>
+      <option value="na-production">NA Production</option>
+      <option value="sa-production">SA Production</option>
+      <option value="local">Local</option>
+    </select>
+    <label for="moduleId">Module ID</label>
+    <input id="moduleId" type="number" value="13" />
+    <label for="scenarioId">Scenario ID</label>
+    <input id="scenarioId" type="text" value="test-scenario" />
+  </fieldset>
+
+  <fieldset>
+    <legend>Login</legend>
+    <label for="username">Username / Email</label>
+    <input id="username" type="text" autocomplete="username" />
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button id="loginBtn">Login</button>
+    <button id="logoutBtn">Logout</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Session</legend>
+    <button id="joinSessionBtn">Join Session</button>
+    <button id="simpleEventBtn">Send Simple Session Event</button>
+    <button id="completeSessionBtn">Complete Session</button>
+  </fieldset>
+
+  <h3>Log</h3>
+  <div id="log"></div>
+
+  <script type="module">
+    import { ApexClient, ApexError } from '../apex-web-sdk.js';
+
+    const $ = (id) => document.getElementById(id);
+    const logEl = $('log');
+
+    function log(message, data) {
+      const time = new Date().toLocaleTimeString();
+      let line = `[${time}] ${message}`;
+      if (data !== undefined) {
+        line += '\n' + JSON.stringify(data, null, 2);
+      }
+      logEl.textContent += line + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    let client = createClient();
+
+    function createClient() {
+      const c = new ApexClient({
+        environment: $('environment').value,
+        moduleId: Number.parseInt($('moduleId').value, 10),
+        scenarioId: $('scenarioId').value,
+        moduleVersion: '1.0.0',
+      });
+      updateStatus(c);
+      return c;
+    }
+
+    function updateStatus(c = client) {
+      const status = $('status');
+      if (c.isLoggedIn) {
+        const session = c.sessionInProgress ? ` — session ${c.sessionId ?? c.sessionUuid} in progress` : '';
+        status.textContent = `Logged in as ${c.user.Email}${session}`;
+        status.style.color = '#2b8a3e';
+      } else {
+        status.textContent = 'Logged out';
+        status.style.color = '#c92a2a';
+      }
+    }
+
+    $('environment').addEventListener('change', () => {
+      client = createClient();
+      log(`Switched environment to ${$('environment').value}`);
+    });
+    $('moduleId').addEventListener('change', () => {
+      client.moduleId = Number.parseInt($('moduleId').value, 10);
+    });
+    $('scenarioId').addEventListener('change', () => {
+      client.scenarioId = $('scenarioId').value;
+    });
+
+    async function run(label, fn) {
+      try {
+        log(`${label}...`);
+        const result = await fn();
+        log(`${label} succeeded.`, result ?? undefined);
+      } catch (e) {
+        if (e instanceof ApexError) {
+          log(`${label} failed: ${e.message}`, e.response ?? undefined);
+        } else {
+          log(`${label} failed: ${e.message}`);
+        }
+      } finally {
+        updateStatus();
+      }
+    }
+
+    $('loginBtn').addEventListener('click', () =>
+      run('Login', async () => {
+        const user = await client.login($('username').value, $('password').value);
+        return { ID: user.ID, Email: user.Email, Role: user.Role };
+      }));
+
+    $('logoutBtn').addEventListener('click', () =>
+      run('Logout', async () => {
+        client.logout();
+      }));
+
+    $('joinSessionBtn').addEventListener('click', () =>
+      run('Join Session', () => client.joinSession()));
+
+    $('simpleEventBtn').addEventListener('click', () =>
+      run('Send Simple Session Event', () =>
+        client.sendSimpleSessionEvent('Pushed Button', 'Test Button', { source: 'test-page' })));
+
+    $('completeSessionBtn').addEventListener('click', () =>
+      run('Complete Session', () =>
+        client.completeSession({
+          score: 85,
+          scoreMin: 0,
+          scoreMax: 100,
+          duration: 60,
+          complete: true,
+          success: true,
+        })));
+
+    // Deep link support: ?pixotoken=...&moduleid=...&scenarioid=...
+    (async () => {
+      const { params, user } = await client.initFromDeepLink().catch((e) => {
+        log(`Deep link login failed: ${e.message}`);
+        return { params: ApexClient.parseDeepLink(), user: null };
+      });
+      if (Object.keys(params).length > 0) {
+        log('Deep link parameters detected.', params);
+      }
+      if (user) {
+        log(`Logged in via deep link token as ${user.Email}.`);
+      }
+      updateStatus();
+    })();
+  </script>
+</body>
+</html>
