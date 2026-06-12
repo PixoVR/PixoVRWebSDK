@@ -39,8 +39,8 @@ await client.completeSession({ score: 85, scoreMax: 100, duration: 60, success: 
 client.logout();
 ```
 
-Login and session state persist in `localStorage` (key `pixovr-apex-session`)
-so reloads keep the user logged in; `logout()` invalidates and clears it.
+State is held in memory only — reloading the page resets the client, and
+`logout()` clears the current user and session information.
 
 ## Deep linking
 

@@ -115,7 +115,6 @@ function buildExtensions(simpleExtensions) {
   return result;
 }
 
-const DEFAULT_STORAGE_KEY = 'pixovr-apex-session';
 
 export class ApexClient {
   /**
@@ -127,9 +126,6 @@ export class ApexClient {
    * @param {string} [options.scenarioId]  Default scenario ID for session calls.
    * @param {string} [options.moduleVersion] Module version reported in xAPI context.revision.
    * @param {string} [options.deviceId]    Device identifier sent with session events.
-   * @param {Storage|null} [options.storage] Storage for session persistence. Defaults to
-   *                                         window.localStorage; pass null to disable.
-   * @param {string} [options.storageKey]  Storage key. Default 'pixovr-apex-session'.
    */
   constructor(options = {}) {
     const env = ApexEnvironments[options.environment || 'na-production'];
@@ -147,11 +143,6 @@ export class ApexClient {
     this.deviceId = options.deviceId ?? 'web';
     this.platform = 'Web';
 
-    this.storage = options.storage === undefined
-      ? (typeof localStorage !== 'undefined' ? localStorage : null)
-      : options.storage;
-    this.storageKey = options.storageKey || DEFAULT_STORAGE_KEY;
-
     /** Current logged-in user (LoginResponseContent shape) or null. */
     this.user = null;
     /** Result of the last checkModuleAccess call, or null. */
@@ -161,8 +152,6 @@ export class ApexClient {
     /** Server-side session ID returned by joinSession, or null. */
     this.sessionId = null;
     this.sessionInProgress = false;
-
-    this._restore();
   }
 
   // ---------------------------------------------------------------------
@@ -175,37 +164,6 @@ export class ApexClient {
 
   get authToken() {
     return this.user ? this.user.Token : null;
-  }
-
-  _persist() {
-    if (!this.storage) return;
-    try {
-      this.storage.setItem(this.storageKey, JSON.stringify({
-        user: this.user,
-        moduleAccess: this.moduleAccess,
-        sessionUuid: this.sessionUuid,
-        sessionId: this.sessionId,
-        sessionInProgress: this.sessionInProgress,
-      }));
-    } catch (e) {
-      console.warn('[ApexClient] Failed to persist session state.', e);
-    }
-  }
-
-  _restore() {
-    if (!this.storage) return;
-    try {
-      const raw = this.storage.getItem(this.storageKey);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      this.user = saved.user ?? null;
-      this.moduleAccess = saved.moduleAccess ?? null;
-      this.sessionUuid = saved.sessionUuid ?? null;
-      this.sessionId = saved.sessionId ?? null;
-      this.sessionInProgress = saved.sessionInProgress ?? false;
-    } catch (e) {
-      console.warn('[ApexClient] Failed to restore session state.', e);
-    }
   }
 
   _requireLogin() {
@@ -340,7 +298,6 @@ export class ApexClient {
     }
 
     this.user = data;
-    this._persist();
     return this.user;
   }
 
@@ -358,7 +315,6 @@ export class ApexClient {
     }
 
     this.user = { ...data.User, Token: data.User.Token || token };
-    this._persist();
     return this.user;
   }
 
@@ -371,13 +327,6 @@ export class ApexClient {
     this.sessionUuid = null;
     this.sessionId = null;
     this.sessionInProgress = false;
-    if (this.storage) {
-      try {
-        this.storage.removeItem(this.storageKey);
-      } catch (e) {
-        console.warn('[ApexClient] Failed to clear stored session state.', e);
-      }
-    }
   }
 
   // ---------------------------------------------------------------------
@@ -407,7 +356,6 @@ export class ApexClient {
     );
 
     this.moduleAccess = data;
-    this._persist();
     return data;
   }
 
@@ -487,7 +435,6 @@ export class ApexClient {
 
     this.sessionInProgress = true;
     this.sessionId = this._extractSessionId(data);
-    this._persist();
 
     return { sessionId: this.sessionId, uuid: this.sessionUuid };
   }
@@ -668,7 +615,6 @@ export class ApexClient {
     this.sessionInProgress = false;
     this.sessionUuid = null;
     this.sessionId = null;
-    this._persist();
 
     return data;
   }
