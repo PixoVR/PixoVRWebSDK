@@ -77,7 +77,7 @@
     <p style="font-size: 0.8rem; margin: 0 0 0.5rem;">
       Open this page with the Apex deep-link parameters in the query string (or
       hash) to populate this panel and auto-login. Supported:
-      <code>pixotoken</code>, <code>optional</code>, <code>returntarget</code>,
+      <code>token</code>, <code>optional</code>, <code>returntarget</code>,
       <code>targettype</code>. <code>optional</code> is a free-form JSON string
       (any structure); it is shown parsed below when it is valid JSON.
     </p>
@@ -142,7 +142,7 @@
     }
 
     function cellHtml(k, params) {
-      if (k === 'pixotoken') return escapeHtml(maskToken(params[k]));
+      if (k === 'token') return escapeHtml(maskToken(params[k]));
       if (k === 'optional' && params.optionalData !== undefined) {
         return `<pre style="margin: 0; white-space: pre-wrap;">` +
           `${escapeHtml(JSON.stringify(params.optionalData, null, 2))}</pre>`;
@@ -153,12 +153,12 @@
     function renderDeepLink(params) {
       const sampleOptional = JSON.stringify({ moduleId: 13, scenarioId: 'intro' });
       const example = `${location.origin}${location.pathname}` +
-        `?pixotoken=<token>&optional=${encodeURIComponent(sampleOptional)}` +
+        `?token=<token>&optional=${encodeURIComponent(sampleOptional)}` +
         '&returntarget=https://example.com&targettype=url';
       $('exampleLink').textContent = example;
 
       // Only the Apex deep-link params are shown; optionalData is derived.
-      const known = ['pixotoken', 'optional', 'returntarget', 'targettype'];
+      const known = ['token', 'optional', 'returntarget', 'targettype'];
       const el = $('deepLinkParams');
       const ordered = known.filter((k) => params[k] !== undefined);
       if (ordered.length === 0) {
@@ -251,16 +251,16 @@
         })));
 
     // Deep link support: renders the params panel above and auto-logs in when a
-    // pixotoken is present (?pixotoken=...&optional=...&returntarget=...).
+    // token is present (?token=...&optional=...&returntarget=...).
     (async () => {
-      if (deepLinkParams.pixotoken) {
+      if (deepLinkParams.token) {
         await run('Deep link login', async () => {
           const { user } = await client.initFromDeepLink();
           if (!user) throw new ApexError('No user returned from token login.');
           return { ID: user.ID, Email: user.Email, Role: user.Role };
         });
       } else if (Object.keys(deepLinkParams).length > 0) {
-        log('Deep link parameters detected (no pixotoken; not auto-logging in).');
+        log('Deep link parameters detected (no token; not auto-logging in).');
       }
       updateStatus();
     })();

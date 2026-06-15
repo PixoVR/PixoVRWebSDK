@@ -16,10 +16,10 @@
  *   - logout()
  *
  * Deep linking:
- *   - ApexClient.parseDeepLink(url) parses pixotoken / optional /
+ *   - ApexClient.parseDeepLink(url) parses token / optional /
  *     returntarget / targettype arguments from a URL.
  *   - client.initFromDeepLink(url) parses the current page URL (or a
- *     provided one) and, if a pixotoken is present, logs in with it.
+ *     provided one) and, if a token is present, logs in with it.
  */
 
 const SDK_VERSION = '1.0.0';
@@ -224,14 +224,14 @@ export class ApexClient {
 
   /**
    * Parses Apex deep link arguments out of a URL. Recognizes the same
-   * arguments the Unity SDK handles: pixotoken, optional, returntarget and
+   * arguments the Unity SDK handles: token, optional, returntarget and
    * targettype. Any other query/fragment keys are ignored.
    *
    * `optional` is a free-form JSON string with no fixed structure; when it is
    * valid JSON the parsed value is also returned as `optionalData`.
    *
    * @param {string} [url] URL to parse. Defaults to the current page URL.
-   * @returns {{pixotoken?: string, optional?: string, optionalData?: *,
+   * @returns {{token?: string, optional?: string, optionalData?: *,
    *            returntarget?: string, targettype?: string}}
    */
   static parseDeepLink(url) {
@@ -246,7 +246,7 @@ export class ApexClient {
       return result;
     }
 
-    const recognized = ['pixotoken', 'optional', 'returntarget', 'targettype'];
+    const recognized = ['token', 'optional', 'returntarget', 'targettype'];
     const collect = (params) => {
       for (const [key, value] of params.entries()) {
         const name = key.toLowerCase();
@@ -255,7 +255,7 @@ export class ApexClient {
     };
 
     collect(parsed.searchParams);
-    // Also support arguments passed in the URL fragment (e.g. #pixotoken=...).
+    // Also support arguments passed in the URL fragment (e.g. #token=...).
     if (parsed.hash && parsed.hash.includes('=')) {
       collect(new URLSearchParams(parsed.hash.replace(/^#\/?/, '')));
     }
@@ -275,7 +275,7 @@ export class ApexClient {
   /**
    * Parses deep link arguments from the given (or current page) URL, stores
    * the optional / returntarget / targettype values, and logs in with the
-   * passed pixotoken when present.
+   * passed token when present.
    *
    * @param {string} [url]
    * @returns {Promise<{params: object, user: object|null}>} Parsed params and,
@@ -296,8 +296,8 @@ export class ApexClient {
     }
 
     let user = null;
-    if (params.pixotoken) {
-      user = await this.loginWithToken(params.pixotoken);
+    if (params.token) {
+      user = await this.loginWithToken(params.token);
     }
 
     return { params, user };
