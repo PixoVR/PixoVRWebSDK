@@ -310,11 +310,13 @@ export class ApexClient {
   async loginWithToken(token) {
     const data = await this._request(this.apiUrl, '/v2/auth/validate-signature', { token });
 
-    if (!data || !data.User) {
+    // The platform API returns the user under "user"; accept "User" too.
+    const userInfo = data && (data.User ?? data.user);
+    if (!userInfo) {
       throw new ApexError('Token login failed: token is invalid or expired.', { response: data });
     }
 
-    this.user = { ...data.User, Token: data.User.Token || token };
+    this.user = { ...userInfo, Token: userInfo.Token || token };
     return this.user;
   }
 
