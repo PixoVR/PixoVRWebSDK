@@ -70,5 +70,19 @@ python3 -m http.server 8080
 # open http://localhost:8080/test/
 ```
 
+### Deep linking on the test page
+
+The test page reads the same deep link arguments as the SDK from the URL's
+query string or hash and shows them in a **Deep Link** panel. `moduleid`,
+`scenarioid`, and `environment` pre-fill the configuration fields, and a
+`pixotoken` (displayed masked) triggers an automatic `loginWithToken` on load.
+
+```
+http://localhost:8080/test/?environment=na-dev&moduleid=13&scenarioid=test-scenario&pixotoken=<token>&optional=foo&returntarget=https://example.com&targettype=url
+```
+
+`environment` is a test-page convenience (one of the `ApexEnvironments` keys);
+the other parameters mirror the Unity SDK's deep link arguments.
+
 Note: the browser must be able to reach the Apex API endpoints, which need to
 allow your page's origin via CORS.
