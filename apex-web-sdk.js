@@ -152,6 +152,14 @@ export class ApexClient {
     /** Server-side session ID returned by joinSession, or null. */
     this.sessionId = null;
     this.sessionInProgress = false;
+
+    // Deep link arguments (mirrors optionalParameter / CurrentExitTarget /
+    // TargetType in the Unity SDK). `optional` is a free-form JSON string;
+    // `optionalData` is its parsed form when it is valid JSON.
+    this.optional = null;
+    this.optionalData = null;
+    this.returnTarget = '';
+    this.targetType = '';
   }
 
   // ---------------------------------------------------------------------
@@ -217,11 +225,14 @@ export class ApexClient {
   /**
    * Parses Apex deep link arguments out of a URL. Recognizes the same
    * arguments the Unity SDK handles: pixotoken, optional, returntarget and
-   * targettype, plus moduleid and scenarioid for web launches.
+   * targettype. Any other query/fragment keys are ignored.
+   *
+   * `optional` is a free-form JSON string with no fixed structure; when it is
+   * valid JSON the parsed value is also returned as `optionalData`.
    *
    * @param {string} [url] URL to parse. Defaults to the current page URL.
-   * @returns {{pixotoken?: string, optional?: string, returntarget?: string,
-   *            targettype?: string, moduleid?: string, scenarioid?: string}}
+   * @returns {{pixotoken?: string, optional?: string, optionalData?: *,
+   *            returntarget?: string, targettype?: string}}
    */
   static parseDeepLink(url) {
     const target = url ?? (typeof window !== 'undefined' ? window.location.href : '');
@@ -235,9 +246,11 @@ export class ApexClient {
       return result;
     }
 
+    const recognized = ['pixotoken', 'optional', 'returntarget', 'targettype'];
     const collect = (params) => {
       for (const [key, value] of params.entries()) {
-        result[key.toLowerCase()] = value;
+        const name = key.toLowerCase();
+        if (recognized.includes(name)) result[name] = value;
       }
     };
 
@@ -247,12 +260,22 @@ export class ApexClient {
       collect(new URLSearchParams(parsed.hash.replace(/^#\/?/, '')));
     }
 
+    // `optional` carries arbitrary JSON; expose the parsed form when valid.
+    if (result.optional !== undefined) {
+      try {
+        result.optionalData = JSON.parse(result.optional);
+      } catch {
+        // Not valid JSON; keep the raw string and leave optionalData unset.
+      }
+    }
+
     return result;
   }
 
   /**
-   * Parses deep link arguments from the given (or current page) URL, applies
-   * moduleid/scenarioid if present, and logs in with the passed pixotoken.
+   * Parses deep link arguments from the given (or current page) URL, stores
+   * the optional / returntarget / targettype values, and logs in with the
+   * passed pixotoken when present.
    *
    * @param {string} [url]
    * @returns {Promise<{params: object, user: object|null}>} Parsed params and,
@@ -261,12 +284,15 @@ export class ApexClient {
   async initFromDeepLink(url) {
     const params = ApexClient.parseDeepLink(url);
 
-    if (params.moduleid !== undefined) {
-      const moduleId = Number.parseInt(params.moduleid, 10);
-      if (!Number.isNaN(moduleId)) this.moduleId = moduleId;
+    if (params.optional !== undefined) {
+      this.optional = params.optional;
+      this.optionalData = params.optionalData ?? null;
     }
-    if (params.scenarioid !== undefined) {
-      this.scenarioId = params.scenarioid;
+    if (params.returntarget !== undefined) {
+      this.returnTarget = params.returntarget;
+    }
+    if (params.targettype !== undefined) {
+      this.targetType = params.targettype;
     }
 
     let user = null;

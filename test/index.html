@@ -75,11 +75,11 @@
   <fieldset>
     <legend>Deep Link</legend>
     <p style="font-size: 0.8rem; margin: 0 0 0.5rem;">
-      Open this page with deep-link parameters in the query string (or hash) to
-      pre-fill the config and auto-login. Supported:
+      Open this page with the Apex deep-link parameters in the query string (or
+      hash) to populate this panel and auto-login. Supported:
       <code>pixotoken</code>, <code>optional</code>, <code>returntarget</code>,
-      <code>targettype</code>, <code>moduleid</code>, <code>scenarioid</code>,
-      <code>environment</code>.
+      <code>targettype</code>. <code>optional</code> is a free-form JSON string
+      (any structure); it is shown parsed below when it is valid JSON.
     </p>
     <p style="font-size: 0.75rem; margin: 0 0 0.5rem; word-break: break-all;">
       Example: <code id="exampleLink"></code>
@@ -125,23 +125,9 @@
 
     // --- Deep link bootstrap (runs before the client is created) ---
     const deepLinkParams = ApexClient.parseDeepLink();
-    applyDeepLinkToForm(deepLinkParams);
 
     let client = createClient();
     renderDeepLink(deepLinkParams);
-
-    function applyDeepLinkToForm(params) {
-      const envOptions = [...$('environment').options].map((o) => o.value);
-      if (params.environment && envOptions.includes(params.environment)) {
-        $('environment').value = params.environment;
-      }
-      if (params.moduleid !== undefined && params.moduleid !== '') {
-        $('moduleId').value = params.moduleid;
-      }
-      if (params.scenarioid !== undefined) {
-        $('scenarioId').value = params.scenarioid;
-      }
-    }
 
     function maskToken(token) {
       if (!token) return '';
@@ -155,27 +141,33 @@
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    function cellHtml(k, params) {
+      if (k === 'pixotoken') return escapeHtml(maskToken(params[k]));
+      if (k === 'optional' && params.optionalData !== undefined) {
+        return `<pre style="margin: 0; white-space: pre-wrap;">` +
+          `${escapeHtml(JSON.stringify(params.optionalData, null, 2))}</pre>`;
+      }
+      return escapeHtml(params[k]);
+    }
+
     function renderDeepLink(params) {
+      const sampleOptional = JSON.stringify({ moduleId: 13, scenarioId: 'intro' });
       const example = `${location.origin}${location.pathname}` +
-        '?environment=na-dev&moduleid=13&scenarioid=test-scenario' +
-        '&pixotoken=<token>&optional=foo&returntarget=https://example.com&targettype=url';
+        `?pixotoken=<token>&optional=${encodeURIComponent(sampleOptional)}` +
+        '&returntarget=https://example.com&targettype=url';
       $('exampleLink').textContent = example;
 
-      const known = ['environment', 'moduleid', 'scenarioid', 'pixotoken',
-        'optional', 'returntarget', 'targettype'];
+      // Only the Apex deep-link params are shown; optionalData is derived.
+      const known = ['pixotoken', 'optional', 'returntarget', 'targettype'];
       const el = $('deepLinkParams');
-      const keys = Object.keys(params);
-      if (keys.length === 0) {
+      const ordered = known.filter((k) => params[k] !== undefined);
+      if (ordered.length === 0) {
         el.textContent = 'No deep link parameters detected.';
         return;
       }
-      const ordered = [...known.filter((k) => params[k] !== undefined),
-        ...keys.filter((k) => !known.includes(k))];
-      const rows = ordered.map((k) => {
-        const display = k === 'pixotoken' ? maskToken(params[k]) : params[k];
-        return `<tr><td style="padding: 0 1rem 0.15rem 0; font-weight: 600;">${escapeHtml(k)}</td>` +
-          `<td style="word-break: break-all;">${escapeHtml(display)}</td></tr>`;
-      });
+      const rows = ordered.map((k) =>
+        `<tr><td style="padding: 0 1rem 0.15rem 0; font-weight: 600; vertical-align: top;">${escapeHtml(k)}</td>` +
+        `<td style="word-break: break-all;">${cellHtml(k, params)}</td></tr>`);
       el.innerHTML = `<table style="border-collapse: collapse;">${rows.join('')}</table>`;
     }
 
@@ -258,8 +250,8 @@
           success: true,
         })));
 
-    // Deep link support: applies env/moduleid/scenarioid above and auto-logs in
-    // when a pixotoken is present (?pixotoken=...&moduleid=...&scenarioid=...).
+    // Deep link support: renders the params panel above and auto-logs in when a
+    // pixotoken is present (?pixotoken=...&optional=...&returntarget=...).
     (async () => {
       if (deepLinkParams.pixotoken) {
         await run('Deep link login', async () => {
