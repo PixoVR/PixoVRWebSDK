@@ -77,7 +77,7 @@
     <p style="font-size: 0.8rem; margin: 0 0 0.5rem;">
       Open this page with the Apex deep-link parameters in the query string (or
       hash) to populate this panel and auto-login. Supported:
-      <code>token</code>, <code>optional</code>, <code>returntarget</code>,
+      <code>pixotoken</code>, <code>optional</code>, <code>returntarget</code>,
       <code>targettype</code>. <code>optional</code> is a free-form JSON string
       (any structure); it is shown parsed below when it is valid JSON.
     </p>
@@ -110,17 +110,17 @@
   <script type="module">
     import { ApexClient, ApexError } from './apex-web-sdk.js';
 
-    const $ = (id) => document.getElementById(id);
-    const logEl = $('log');
+    const getElementById = (id) => document.getElementById(id);
+    const logElement = getElementById('log');
 
-    function log(message, data) {
-      const time = new Date().toLocaleTimeString();
-      let line = `[${time}] ${message}`;
+    function appendLog(message, data) {
+      const timestamp = new Date().toLocaleTimeString();
+      let logLine = `[${timestamp}] ${message}`;
       if (data !== undefined) {
-        line += '\n' + JSON.stringify(data, null, 2);
+        logLine += '\n' + JSON.stringify(data, null, 2);
       }
-      logEl.textContent += line + '\n';
-      logEl.scrollTop = logEl.scrollHeight;
+      logElement.textContent += logLine + '\n';
+      logElement.scrollTop = logElement.scrollHeight;
     }
 
     // --- Deep link bootstrap (runs before the client is created) ---
@@ -137,110 +137,110 @@
     }
 
     function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, (c) =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      return String(value).replace(/[&<>"']/g, (character) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     }
 
-    function cellHtml(k, params) {
-      if (k === 'pixotoken') return escapeHtml(maskToken(params[k]));
-      if (k === 'optional' && params.optionalData !== undefined) {
+    function renderParamCellHtml(paramName, params) {
+      if (paramName === 'pixotoken') return escapeHtml(maskToken(params[paramName]));
+      if (paramName === 'optional' && params.optionalData !== undefined) {
         return `<pre style="margin: 0; white-space: pre-wrap;">` +
           `${escapeHtml(JSON.stringify(params.optionalData, null, 2))}</pre>`;
       }
-      return escapeHtml(params[k]);
+      return escapeHtml(params[paramName]);
     }
 
     function renderDeepLink(params) {
-      const sampleOptional = JSON.stringify({ moduleId: 13, scenarioId: 'intro' });
-      const example = `${location.origin}${location.pathname}` +
-        `?pixotoken=<token>&optional=${encodeURIComponent(sampleOptional)}` +
+      const sampleOptionalJson = JSON.stringify({ moduleId: 13, scenarioId: 'intro' });
+      const exampleUrl = `${location.origin}${location.pathname}` +
+        `?pixotoken=<token>&optional=${encodeURIComponent(sampleOptionalJson)}` +
         '&returntarget=https://example.com&targettype=url';
-      $('exampleLink').textContent = example;
+      getElementById('exampleLink').textContent = exampleUrl;
 
       // Only the Apex deep-link params are shown; optionalData is derived.
-      const known = ['pixotoken', 'optional', 'returntarget', 'targettype'];
-      const el = $('deepLinkParams');
-      const ordered = known.filter((k) => params[k] !== undefined);
-      if (ordered.length === 0) {
-        el.textContent = 'No deep link parameters detected.';
+      const knownParamNames = ['pixotoken', 'optional', 'returntarget', 'targettype'];
+      const paramsContainer = getElementById('deepLinkParams');
+      const presentParamNames = knownParamNames.filter((paramName) => params[paramName] !== undefined);
+      if (presentParamNames.length === 0) {
+        paramsContainer.textContent = 'No deep link parameters detected.';
         return;
       }
-      const rows = ordered.map((k) =>
-        `<tr><td style="padding: 0 1rem 0.15rem 0; font-weight: 600; vertical-align: top;">${escapeHtml(k)}</td>` +
-        `<td style="word-break: break-all;">${cellHtml(k, params)}</td></tr>`);
-      el.innerHTML = `<table style="border-collapse: collapse;">${rows.join('')}</table>`;
+      const paramRows = presentParamNames.map((paramName) =>
+        `<tr><td style="padding: 0 1rem 0.15rem 0; font-weight: 600; vertical-align: top;">${escapeHtml(paramName)}</td>` +
+        `<td style="word-break: break-all;">${renderParamCellHtml(paramName, params)}</td></tr>`);
+      paramsContainer.innerHTML = `<table style="border-collapse: collapse;">${paramRows.join('')}</table>`;
     }
 
     function createClient() {
-      const c = new ApexClient({
-        environment: $('environment').value,
-        moduleId: Number.parseInt($('moduleId').value, 10),
-        scenarioId: $('scenarioId').value,
+      const newClient = new ApexClient({
+        environment: getElementById('environment').value,
+        moduleId: Number.parseInt(getElementById('moduleId').value, 10),
+        scenarioId: getElementById('scenarioId').value,
         moduleVersion: '1.0.0',
       });
-      updateStatus(c);
-      return c;
+      updateStatus(newClient);
+      return newClient;
     }
 
-    function updateStatus(c = client) {
-      const status = $('status');
-      if (c.isLoggedIn) {
-        const session = c.sessionInProgress ? ` — session ${c.sessionId ?? c.sessionUuid} in progress` : '';
-        status.textContent = `Logged in as ${c.user.Email}${session}`;
-        status.style.color = '#2b8a3e';
+    function updateStatus(activeClient = client) {
+      const statusElement = getElementById('status');
+      if (activeClient.isLoggedIn) {
+        const sessionSuffix = activeClient.sessionInProgress ? ` — session ${activeClient.sessionId ?? activeClient.sessionUuid} in progress` : '';
+        statusElement.textContent = `Logged in as ${activeClient.user.Email}${sessionSuffix}`;
+        statusElement.style.color = '#2b8a3e';
       } else {
-        status.textContent = 'Logged out';
-        status.style.color = '#c92a2a';
+        statusElement.textContent = 'Logged out';
+        statusElement.style.color = '#c92a2a';
       }
     }
 
-    $('environment').addEventListener('change', () => {
+    getElementById('environment').addEventListener('change', () => {
       client = createClient();
-      log(`Switched environment to ${$('environment').value}`);
+      appendLog(`Switched environment to ${getElementById('environment').value}`);
     });
-    $('moduleId').addEventListener('change', () => {
-      client.moduleId = Number.parseInt($('moduleId').value, 10);
+    getElementById('moduleId').addEventListener('change', () => {
+      client.moduleId = Number.parseInt(getElementById('moduleId').value, 10);
     });
-    $('scenarioId').addEventListener('change', () => {
-      client.scenarioId = $('scenarioId').value;
+    getElementById('scenarioId').addEventListener('change', () => {
+      client.scenarioId = getElementById('scenarioId').value;
     });
 
-    async function run(label, fn) {
+    async function runAction(label, action) {
       try {
-        log(`${label}...`);
-        const result = await fn();
-        log(`${label} succeeded.`, result ?? undefined);
-      } catch (e) {
-        if (e instanceof ApexError) {
-          log(`${label} failed: ${e.message}`, e.response ?? undefined);
+        appendLog(`${label}...`);
+        const result = await action();
+        appendLog(`${label} succeeded.`, result ?? undefined);
+      } catch (error) {
+        if (error instanceof ApexError) {
+          appendLog(`${label} failed: ${error.message}`, error.response ?? undefined);
         } else {
-          log(`${label} failed: ${e.message}`);
+          appendLog(`${label} failed: ${error.message}`);
         }
       } finally {
         updateStatus();
       }
     }
 
-    $('loginBtn').addEventListener('click', () =>
-      run('Login', async () => {
-        const user = await client.login($('username').value, $('password').value);
+    getElementById('loginBtn').addEventListener('click', () =>
+      runAction('Login', async () => {
+        const user = await client.login(getElementById('username').value, getElementById('password').value);
         return { ID: user.ID, Email: user.Email, Role: user.Role };
       }));
 
-    $('logoutBtn').addEventListener('click', () =>
-      run('Logout', async () => {
+    getElementById('logoutBtn').addEventListener('click', () =>
+      runAction('Logout', async () => {
         client.logout();
       }));
 
-    $('joinSessionBtn').addEventListener('click', () =>
-      run('Join Session', () => client.joinSession()));
+    getElementById('joinSessionBtn').addEventListener('click', () =>
+      runAction('Join Session', () => client.joinSession()));
 
-    $('simpleEventBtn').addEventListener('click', () =>
-      run('Send Simple Session Event', () =>
+    getElementById('simpleEventBtn').addEventListener('click', () =>
+      runAction('Send Simple Session Event', () =>
         client.sendSimpleSessionEvent('Pushed Button', 'Test Button', { source: 'test-page' })));
 
-    $('completeSessionBtn').addEventListener('click', () =>
-      run('Complete Session', () =>
+    getElementById('completeSessionBtn').addEventListener('click', () =>
+      runAction('Complete Session', () =>
         client.completeSession({
           score: 85,
           scoreMin: 0,
@@ -251,16 +251,16 @@
         })));
 
     // Deep link support: renders the params panel above and auto-logs in when a
-    // token is present (?pixotoken=...&optional=...&returntarget=...).
+    // pixotoken is present (?pixotoken=...&optional=...&returntarget=...).
     (async () => {
       if (deepLinkParams.pixotoken) {
-        await run('Deep link login', async () => {
+        await runAction('Deep link login', async () => {
           const { user } = await client.initFromDeepLink();
           if (!user) throw new ApexError('No user returned from token login.');
           return { ID: user.ID, Email: user.Email, Role: user.Role };
         });
       } else if (Object.keys(deepLinkParams).length > 0) {
-        log('Deep link parameters detected (no token; not auto-logging in).');
+        appendLog('Deep link parameters detected (no pixotoken; not auto-logging in).');
       }
       updateStatus();
     })();
