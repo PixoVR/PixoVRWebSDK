@@ -142,7 +142,7 @@
     }
 
     function cellHtml(k, params) {
-      if (k === 'token') return escapeHtml(maskToken(params[k]));
+      if (k === 'pixotoken') return escapeHtml(maskToken(params[k]));
       if (k === 'optional' && params.optionalData !== undefined) {
         return `<pre style="margin: 0; white-space: pre-wrap;">` +
           `${escapeHtml(JSON.stringify(params.optionalData, null, 2))}</pre>`;
@@ -153,12 +153,12 @@
     function renderDeepLink(params) {
       const sampleOptional = JSON.stringify({ moduleId: 13, scenarioId: 'intro' });
       const example = `${location.origin}${location.pathname}` +
-        `?token=<token>&optional=${encodeURIComponent(sampleOptional)}` +
+        `?pixotoken=<token>&optional=${encodeURIComponent(sampleOptional)}` +
         '&returntarget=https://example.com&targettype=url';
       $('exampleLink').textContent = example;
 
       // Only the Apex deep-link params are shown; optionalData is derived.
-      const known = ['token', 'optional', 'returntarget', 'targettype'];
+      const known = ['pixotoken', 'optional', 'returntarget', 'targettype'];
       const el = $('deepLinkParams');
       const ordered = known.filter((k) => params[k] !== undefined);
       if (ordered.length === 0) {
