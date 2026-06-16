@@ -45,20 +45,20 @@ State is held in memory only — reloading the page resets the client, and
 ## Deep linking
 
 The SDK understands the same deep link arguments as the Unity SDK —
-`token`, `optional`, `returntarget`, `targettype` — read from the page
+`pixotoken`, `optional`, `returntarget`, `targettype` — read from the page
 URL's query string or fragment. Any other keys are ignored. `optional` is a
 free-form JSON string (no fixed structure); when it is valid JSON the parsed
 value is also returned as `optionalData`.
 
 ```js
-// e.g. https://example.com/page?token=abc123&optional=%7B%22moduleId%22%3A13%7D
+// e.g. https://example.com/page?pixotoken=abc123&optional=%7B%22moduleId%22%3A13%7D
 const { params, user } = await client.initFromDeepLink();
-// Logs in with token automatically when present, and stores
+// Logs in with the pixotoken automatically when present, and stores
 // optional / optionalData / returnTarget / targetType on the client.
 
 // Or parse without acting on it:
 const params = ApexClient.parseDeepLink();
-// params: { token?, optional?, optionalData?, returntarget?, targettype? }
+// params: { pixotoken?, optional?, optionalData?, returntarget?, targettype? }
 ```
 
 ## Test page
@@ -77,12 +77,12 @@ python3 -m http.server 8080
 ### Deep linking on the test page
 
 The test page reads the same deep link arguments as the SDK from the URL's
-query string or hash and shows them in a **Deep Link** panel. The `token`
+query string or hash and shows them in a **Deep Link** panel. The `pixotoken`
 is displayed masked and triggers an automatic `loginWithToken` on load;
 `optional` is shown parsed when it is valid JSON.
 
 ```
-http://localhost:8080/test/?token=<token>&optional=%7B%22moduleId%22%3A13%7D&returntarget=https://example.com&targettype=url
+http://localhost:8080/test/?pixotoken=<token>&optional=%7B%22moduleId%22%3A13%7D&returntarget=https://example.com&targettype=url
 ```
 
 (Environment, Module ID, and Scenario ID remain manual configuration fields on
