@@ -60,9 +60,9 @@
     <legend>Configuration</legend>
     <label for="environment">Environment</label>
     <select id="environment">
-      <option value="na-dev" selected>NA Dev</option>
+      <option value="na-dev">NA Dev</option>
       <option value="na-stage">NA Stage</option>
-      <option value="na-production">NA Production</option>
+      <option value="na-production" selected>NA Production</option>
       <option value="sa-production">SA Production</option>
       <option value="local">Local</option>
     </select>
@@ -108,7 +108,7 @@
   <div id="log"></div>
 
   <script type="module">
-    import { ApexClient, ApexError } from '../apex-web-sdk.js';
+    import { ApexClient, ApexError } from './apex-web-sdk.js';
 
     const $ = (id) => document.getElementById(id);
     const logEl = $('log');
@@ -251,9 +251,9 @@
         })));
 
     // Deep link support: renders the params panel above and auto-logs in when a
-    // token is present (?token=...&optional=...&returntarget=...).
+    // token is present (?pixotoken=...&optional=...&returntarget=...).
     (async () => {
-      if (deepLinkParams.token) {
+      if (deepLinkParams.pixotoken) {
         await run('Deep link login', async () => {
           const { user } = await client.initFromDeepLink();
           if (!user) throw new ApexError('No user returned from token login.');
