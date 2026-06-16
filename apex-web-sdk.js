@@ -16,10 +16,10 @@
  *   - logout()
  *
  * Deep linking:
- *   - ApexClient.parseDeepLink(url) parses token / optional /
+ *   - ApexClient.parseDeepLink(url) parses pixotoken / optional /
  *     returntarget / targettype arguments from a URL.
  *   - client.initFromDeepLink(url) parses the current page URL (or a
- *     provided one) and, if a token is present, logs in with it.
+ *     provided one) and, if a pixotoken is present, logs in with it.
  */
 
 const SDK_VERSION = '1.0.0';
@@ -80,24 +80,24 @@ function generateUuid() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (placeholderChar) => {
+    const randomNibble = (Math.random() * 16) | 0;
+    const hexValue = placeholderChar === 'x' ? randomNibble : (randomNibble & 0x3) | 0x8;
+    return hexValue.toString(16);
   });
 }
 
 /** Converts seconds to an ISO-8601 duration (e.g. 90 -> "PT1M30S"). */
 function secondsToIsoDuration(totalSeconds) {
-  const seconds = Math.max(0, Math.floor(totalSeconds || 0));
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  let out = 'PT';
-  if (h > 0) out += `${h}H`;
-  if (m > 0) out += `${m}M`;
-  if (s > 0 || out === 'PT') out += `${s}S`;
-  return out;
+  const wholeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
+  const hours = Math.floor(wholeSeconds / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
+  const remainingSeconds = wholeSeconds % 60;
+  let isoDuration = 'PT';
+  if (hours > 0) isoDuration += `${hours}H`;
+  if (minutes > 0) isoDuration += `${minutes}M`;
+  if (remainingSeconds > 0 || isoDuration === 'PT') isoDuration += `${remainingSeconds}S`;
+  return isoDuration;
 }
 
 /**
@@ -106,13 +106,13 @@ function secondsToIsoDuration(totalSeconds) {
  * mirroring Extension.AddSimple in the Unity SDK.
  */
 function buildExtensions(simpleExtensions) {
-  const result = {};
-  if (!simpleExtensions) return result;
-  for (const [key, value] of Object.entries(simpleExtensions)) {
-    const uri = /^https?:\/\//i.test(key) ? key : EXTENSION_BASE + key;
-    result[uri] = String(value);
+  const prefixedExtensions = {};
+  if (!simpleExtensions) return prefixedExtensions;
+  for (const [extensionKey, extensionValue] of Object.entries(simpleExtensions)) {
+    const extensionUri = /^https?:\/\//i.test(extensionKey) ? extensionKey : EXTENSION_BASE + extensionKey;
+    prefixedExtensions[extensionUri] = String(extensionValue);
   }
-  return result;
+  return prefixedExtensions;
 }
 
 
@@ -180,42 +180,42 @@ export class ApexClient {
     }
   }
 
-  async _request(baseUrl, path, { method = 'GET', body, token } = {}) {
-    const headers = { Accept: 'application/json' };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (token) headers.Authorization = `Bearer ${token}`;
+  async _sendJsonRequest(baseUrl, path, { method = 'GET', body, token } = {}) {
+    const requestHeaders = { Accept: 'application/json' };
+    if (body !== undefined) requestHeaders['Content-Type'] = 'application/json';
+    if (token) requestHeaders.Authorization = `Bearer ${token}`;
 
-    let response;
+    let httpResponse;
     try {
-      response = await fetch(baseUrl + path, {
+      httpResponse = await fetch(baseUrl + path, {
         method,
-        headers,
+        headers: requestHeaders,
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
-    } catch (e) {
-      throw new ApexError(`Network request failed: ${e.message}`);
+    } catch (networkError) {
+      throw new ApexError(`Network request failed: ${networkError.message}`);
     }
 
-    let data = null;
-    const text = await response.text();
-    if (text) {
+    let responseData = null;
+    const responseText = await httpResponse.text();
+    if (responseText) {
       try {
-        data = JSON.parse(text);
+        responseData = JSON.parse(responseText);
       } catch {
-        data = text;
+        responseData = responseText;
       }
     }
 
-    const failed = !response.ok ||
-      (data && typeof data === 'object' && typeof data.Error === 'string' &&
-        data.Error.toLowerCase() === 'true');
-    if (failed) {
-      const message = (data && typeof data === 'object' && (data.Message || data.Error)) ||
-        `Request to ${path} failed with status ${response.status}`;
-      throw new ApexError(message, { httpCode: response.status, response: data });
+    const requestFailed = !httpResponse.ok ||
+      (responseData && typeof responseData === 'object' && typeof responseData.Error === 'string' &&
+        responseData.Error.toLowerCase() === 'true');
+    if (requestFailed) {
+      const errorMessage = (responseData && typeof responseData === 'object' && (responseData.Message || responseData.Error)) ||
+        `Request to ${path} failed with status ${httpResponse.status}`;
+      throw new ApexError(errorMessage, { httpCode: httpResponse.status, response: responseData });
     }
 
-    return data;
+    return responseData;
   }
 
   // ---------------------------------------------------------------------
@@ -224,83 +224,83 @@ export class ApexClient {
 
   /**
    * Parses Apex deep link arguments out of a URL. Recognizes the same
-   * arguments the Unity SDK handles: token, optional, returntarget and
+   * arguments the Unity SDK handles: pixotoken, optional, returntarget and
    * targettype. Any other query/fragment keys are ignored.
    *
    * `optional` is a free-form JSON string with no fixed structure; when it is
    * valid JSON the parsed value is also returned as `optionalData`.
    *
    * @param {string} [url] URL to parse. Defaults to the current page URL.
-   * @returns {{token?: string, optional?: string, optionalData?: *,
+   * @returns {{pixotoken?: string, optional?: string, optionalData?: *,
    *            returntarget?: string, targettype?: string}}
    */
   static parseDeepLink(url) {
-    const target = url ?? (typeof window !== 'undefined' ? window.location.href : '');
-    const result = {};
-    if (!target) return result;
+    const urlToParse = url ?? (typeof window !== 'undefined' ? window.location.href : '');
+    const parsedParams = {};
+    if (!urlToParse) return parsedParams;
 
-    let parsed;
+    let parsedUrl;
     try {
-      parsed = new URL(target);
+      parsedUrl = new URL(urlToParse);
     } catch {
-      return result;
+      return parsedParams;
     }
 
-    const recognized = ['pixotoken', 'optional', 'returntarget', 'targettype'];
-    const collect = (params) => {
-      for (const [key, value] of params.entries()) {
-        const name = key.toLowerCase();
-        if (recognized.includes(name)) result[name] = value;
+    const recognizedParamNames = ['pixotoken', 'optional', 'returntarget', 'targettype'];
+    const collectRecognizedParams = (searchParams) => {
+      for (const [rawKey, rawValue] of searchParams.entries()) {
+        const normalizedKey = rawKey.toLowerCase();
+        if (recognizedParamNames.includes(normalizedKey)) parsedParams[normalizedKey] = rawValue;
       }
     };
 
-    collect(parsed.searchParams);
-    // Also support arguments passed in the URL fragment (e.g. #token=...).
-    if (parsed.hash && parsed.hash.includes('=')) {
-      collect(new URLSearchParams(parsed.hash.replace(/^#\/?/, '')));
+    collectRecognizedParams(parsedUrl.searchParams);
+    // Also support arguments passed in the URL fragment (e.g. #pixotoken=...).
+    if (parsedUrl.hash && parsedUrl.hash.includes('=')) {
+      collectRecognizedParams(new URLSearchParams(parsedUrl.hash.replace(/^#\/?/, '')));
     }
 
     // `optional` carries arbitrary JSON; expose the parsed form when valid.
-    if (result.optional !== undefined) {
+    if (parsedParams.optional !== undefined) {
       try {
-        result.optionalData = JSON.parse(result.optional);
+        parsedParams.optionalData = JSON.parse(parsedParams.optional);
       } catch {
         // Not valid JSON; keep the raw string and leave optionalData unset.
       }
     }
 
-    return result;
+    return parsedParams;
   }
 
   /**
    * Parses deep link arguments from the given (or current page) URL, stores
    * the optional / returntarget / targettype values, and logs in with the
-   * passed token when present.
+   * passed pixotoken when present.
    *
    * @param {string} [url]
    * @returns {Promise<{params: object, user: object|null}>} Parsed params and,
    *          if a token login occurred, the logged-in user.
    */
   async initFromDeepLink(url) {
-    const params = ApexClient.parseDeepLink(url);
+    const deepLinkParams = ApexClient.parseDeepLink(url);
 
-    if (params.optional !== undefined) {
-      this.optional = params.optional;
-      this.optionalData = params.optionalData ?? null;
+    if (deepLinkParams.optional !== undefined) {
+      this.optional = deepLinkParams.optional;
+      this.optionalData = deepLinkParams.optionalData ?? null;
     }
-    if (params.returntarget !== undefined) {
-      this.returnTarget = params.returntarget;
+    if (deepLinkParams.returntarget !== undefined) {
+      this.returnTarget = deepLinkParams.returntarget;
     }
-    if (params.targettype !== undefined) {
-      this.targetType = params.targettype;
-    }
-
-    let user = null;
-    if (params.pixotoken) {
-      user = await this.loginWithToken(params.pixotoken);
+    if (deepLinkParams.targettype !== undefined) {
+      this.targetType = deepLinkParams.targettype;
     }
 
-    return { params, user };
+    let loggedInUser = null;
+    if (deepLinkParams.pixotoken) {
+      loggedInUser = await this.loginWithToken(deepLinkParams.pixotoken);
+    }
+
+    return { params: deepLinkParams, user: loggedInUser };
   }
 
   // ---------------------------------------------------------------------
@@ -314,16 +314,16 @@ export class ApexClient {
    * @returns {Promise<object>} The logged-in user information.
    */
   async login(username, password) {
-    const data = await this._request(this.modulesUrl, '/login', {
+    const loginResponse = await this._sendJsonRequest(this.modulesUrl, '/login', {
       method: 'POST',
       body: { Login: username, Password: password },
     });
 
-    if (!data || !data.Token || !data.Email) {
-      throw new ApexError('Login failed: invalid credentials or malformed response.', { response: data });
+    if (!loginResponse || !loginResponse.Token || !loginResponse.Email) {
+      throw new ApexError('Login failed: invalid credentials or malformed response.', { response: loginResponse });
     }
 
-    this.user = data;
+    this.user = loginResponse;
     return this.user;
   }
 
@@ -334,15 +334,15 @@ export class ApexClient {
    * @returns {Promise<object>} The logged-in user information.
    */
   async loginWithToken(token) {
-    const data = await this._request(this.apiUrl, '/v2/auth/validate-signature', { token });
+    const validationResponse = await this._sendJsonRequest(this.apiUrl, '/v2/auth/validate-signature', { token });
 
     // The platform API returns the user under "user"; accept "User" too.
-    const userInfo = data && (data.User ?? data.user);
-    if (!userInfo) {
-      throw new ApexError('Token login failed: token is invalid or expired.', { response: data });
+    const authenticatedUser = validationResponse && (validationResponse.User ?? validationResponse.user);
+    if (!authenticatedUser) {
+      throw new ApexError('Token login failed: token is invalid or expired.', { response: validationResponse });
     }
 
-    this.user = { ...userInfo, Token: userInfo.Token || token };
+    this.user = { ...authenticatedUser, Token: authenticatedUser.Token || token };
     return this.user;
   }
 
@@ -377,14 +377,14 @@ export class ApexClient {
       throw new ApexError('No module ID provided to check access for.');
     }
 
-    const serial = serialNumber ? `?serial=${encodeURIComponent(serialNumber)}` : '';
-    const data = await this._request(
+    const serialQuery = serialNumber ? `?serial=${encodeURIComponent(serialNumber)}` : '';
+    const accessResponse = await this._sendJsonRequest(
       this.modulesUrl,
-      `/access/user/${this.user.ID}/module/${targetModuleId}${serial}`,
+      `/access/user/${this.user.ID}/module/${targetModuleId}${serialQuery}`,
     );
 
-    this.moduleAccess = data;
-    return data;
+    this.moduleAccess = accessResponse;
+    return accessResponse;
   }
 
   // ---------------------------------------------------------------------
@@ -435,7 +435,7 @@ export class ApexClient {
 
     this.sessionUuid = generateUuid();
 
-    const statement = {
+    const joinStatement = {
       actor: { mbox: this.user.Email, objectType: 'Agent' },
       verb: {
         id: ApexVerbs.JOINED_SESSION,
@@ -449,7 +449,7 @@ export class ApexClient {
       timestamp: new Date().toISOString(),
     };
 
-    const data = await this._request(this.modulesUrl, '/event', {
+    const joinResponse = await this._sendJsonRequest(this.modulesUrl, '/event', {
       method: 'POST',
       token: this.authToken,
       body: {
@@ -457,23 +457,23 @@ export class ApexClient {
         eventType: ApexEventTypes.PIXOVR_SESSION_JOINED,
         moduleId: this.moduleId,
         deviceId: this.deviceId,
-        jsonData: statement,
+        jsonData: joinStatement,
       },
     });
 
     this.sessionInProgress = true;
-    this.sessionId = this._extractSessionId(data);
+    this.sessionId = this._extractSessionId(joinResponse);
 
     return { sessionId: this.sessionId, uuid: this.sessionUuid };
   }
 
-  _extractSessionId(data) {
-    const container = data && typeof data === 'object' ? (data.Data ?? data) : null;
-    if (!container || typeof container !== 'object') return null;
-    for (const key of Object.keys(container)) {
-      if (key.toLowerCase() === 'sessionid') {
-        const value = Number.parseInt(container[key], 10);
-        return Number.isNaN(value) ? null : value;
+  _extractSessionId(eventResponse) {
+    const responseBody = eventResponse && typeof eventResponse === 'object' ? (eventResponse.Data ?? eventResponse) : null;
+    if (!responseBody || typeof responseBody !== 'object') return null;
+    for (const responseKey of Object.keys(responseBody)) {
+      if (responseKey.toLowerCase() === 'sessionid') {
+        const parsedSessionId = Number.parseInt(responseBody[responseKey], 10);
+        return Number.isNaN(parsedSessionId) ? null : parsedSessionId;
       }
     }
     return null;
@@ -533,21 +533,21 @@ export class ApexClient {
       throw new ApexError('Statement object (target) is required.');
     }
 
-    const context = statement.context ?? {};
-    const fullStatement = {
+    const providedContext = statement.context ?? {};
+    const enrichedStatement = {
       ...statement,
       actor: { mbox: this.user.Email, objectType: 'Agent' },
       context: {
-        ...context,
+        ...providedContext,
         registration: this.sessionUuid,
         revision: this.moduleVersion,
         platform: this.platform,
-        extensions: this._standardContextExtensions(context.extensions),
+        extensions: this._standardContextExtensions(providedContext.extensions),
       },
       timestamp: new Date().toISOString(),
     };
 
-    return this._request(this.modulesUrl, '/event', {
+    return this._sendJsonRequest(this.modulesUrl, '/event', {
       method: 'POST',
       token: this.authToken,
       body: {
@@ -555,7 +555,7 @@ export class ApexClient {
         eventType: ApexEventTypes.PIXOVR_SESSION_EVENT,
         moduleId: this.moduleId,
         deviceId: this.deviceId,
-        jsonData: fullStatement,
+        jsonData: enrichedStatement,
       },
     });
   }
@@ -596,17 +596,17 @@ export class ApexClient {
       scoreScaled = (score / scoreMax) * 100;
     }
 
-    const result = {
+    const sessionResult = {
       completion: complete,
       success,
       score: { min: scoreMin, max: scoreMax, raw: score, scaled: scoreScaled },
       duration: secondsToIsoDuration(duration),
     };
     if (options.resultExtensions) {
-      result.extensions = buildExtensions(options.resultExtensions);
+      sessionResult.extensions = buildExtensions(options.resultExtensions);
     }
 
-    const statement = {
+    const completionStatement = {
       actor: { mbox: this.user.Email, objectType: 'Agent' },
       verb: {
         id: ApexVerbs.COMPLETED_SESSION,
@@ -617,7 +617,7 @@ export class ApexClient {
         objectType: 'Activity',
       },
       context: this._buildContext(options.extensions),
-      result,
+      result: sessionResult,
       timestamp: new Date().toISOString(),
       score,
       scoreMin,
@@ -628,7 +628,7 @@ export class ApexClient {
       moduleName: String(this.moduleId),
     };
 
-    const data = await this._request(this.modulesUrl, '/event', {
+    const completeResponse = await this._sendJsonRequest(this.modulesUrl, '/event', {
       method: 'POST',
       token: this.authToken,
       body: {
@@ -636,7 +636,7 @@ export class ApexClient {
         eventType: ApexEventTypes.PIXOVR_SESSION_COMPLETE,
         moduleId: this.moduleId,
         deviceId: this.deviceId,
-        jsonData: statement,
+        jsonData: completionStatement,
       },
     });
 
@@ -644,7 +644,7 @@ export class ApexClient {
     this.sessionUuid = null;
     this.sessionId = null;
 
-    return data;
+    return completeResponse;
   }
 }
 
