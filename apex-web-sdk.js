@@ -246,7 +246,7 @@ export class ApexClient {
       return result;
     }
 
-    const recognized = ['token', 'optional', 'returntarget', 'targettype'];
+    const recognized = ['pixotoken', 'optional', 'returntarget', 'targettype'];
     const collect = (params) => {
       for (const [key, value] of params.entries()) {
         const name = key.toLowerCase();
